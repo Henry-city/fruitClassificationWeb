@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>水果分类（K-Means训练）交互平台</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <link href="https://ai-public.mastergo.com/gen_page/tailwind-custom.css" rel="stylesheet"/>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+    
+     <script src="https://cdn.tailwindcss.com/3.4.5?plugins=forms@0.5.7,typography@0.5.13,aspect-ratio@0.4.2,container-queries@0.1.1"></script>
+    <script src="https://ai-public.mastergo.com/gen_page/tailwind-config.min.js" data-color="#000000" data-border-radius="small"></script>
+    </head>
+  <body>
+    <div class="min-h-screen bg-gray-50 py-8 px-4">
+      <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold text-gray-900 mb-2">水果分类（K-Means训练）交互平台</h1>
+        <p class="text-gray-600">华东师范大学智慧超声研究中心</p>
+      </div>
+
+      <div class="max-w-7xl mx-auto flex gap-8">
+        <div class="w-[40%] bg-white rounded-lg p-6 shadow-sm">
+          <div class="space-y-8"><div class="space-y-6"><div class="flex flex-col gap-2"><label class="text-gray-700">选择水果种类</label><select class="w-full rounded-md border-gray-300 shadow-sm text-sm" id="fruitType"><option value="watermelon">西瓜</option><option value="pineapple">菠萝</option><option value="grape">青梅</option><option value="orange">橙子</option></select></div><div class="flex flex-col gap-2"><label class="text-gray-700">水果颜色值 (0-255)</label><div class="flex items-center gap-2"><div class="flex-1"><input type="number" class="w-full rounded-md border-gray-300 shadow-sm text-sm" id="colorValue" min="0" max="255" placeholder="请输入颜色值 (0-255)"/><div class="hidden text-red-500 text-sm mt-1" id="colorError"><i class="fas fa-exclamation-circle"></i> 输入的值不在范围内！</div></div><div id="colorPreview" class="w-10 h-10 border border-gray-300 rounded-md"></div></div></div><div class="flex flex-col gap-2"><label class="text-gray-700">水果质量 (0-5 kg)</label><input type="number" class="w-full rounded-md border-gray-300 shadow-sm text-sm" id="weightValue" min="0" max="5" step="0.1" placeholder="请输入质量值 (0-5)"/><div class="hidden text-red-500 text-sm mt-1" id="weightError"><i class="fas fa-exclamation-circle"></i> 输入的值不在范围内！</div></div><button id="confirmBtn" class="w-full bg-custom text-white py-2 rounded-md !rounded-button hover:bg-opacity-90 mt-4">确认</button></div></div>
+        </div>
+
+        <div class="w-[60%] bg-white rounded-lg p-6 shadow-sm">
+          <div id="chart" class="w-full h-[400px]"></div><div id="colorGradient" class="w-full h-[50px] rounded mt-4" style="background: linear-gradient(to right, rgb(1,255,0), rgb(255,255,0))"></div>
+        </div>
+      </div>
+
+      <div class="max-w-7xl mx-auto mt-8"><div class="bg-white rounded-lg p-6 shadow-sm"><div class="space-y-6"><button id="predictButton" class="w-full bg-custom text-white py-3 rounded-md !rounded-button hover:bg-opacity-90 text-lg mb-6">开始预测</button><div class="flex gap-4 mb-4"><div class="flex-1"><div class="flex flex-col gap-2"><label class="text-gray-700">水果颜色值 (0-255)</label><div class="flex items-center gap-2"><input type="number" class="w-full rounded-md border-gray-300 shadow-sm text-sm" id="predictColorValue" min="0" max="255" placeholder="请输入颜色值 (0-255)"/><div class="hidden text-red-500 text-sm mt-1" id="predictColorError"><i class="fas fa-exclamation-circle"></i> 输入的值不在范围内！</div></div></div></div><div class="flex-1"><div class="flex flex-col gap-2"><label class="text-gray-700">水果质量 (0-5 kg)</label><div class="flex items-center gap-2"><input type="number" class="w-full rounded-md border-gray-300 shadow-sm text-sm" id="predictWeightValue" min="0" max="5" step="0.1" placeholder="请输入质量值 (0-5)"/><div class="hidden text-red-500 text-sm mt-1" id="predictWeightError"><i class="fas fa-exclamation-circle"></i> 输入的值不在范围内！</div></div></div></div></div><div class="text-gray-700">预测此水果为：<span id="predictionResult" class="text-custom font-bold">？？？</span></div></div></div></div>
+    </div>
+
+    <script>const chart = echarts.init(document.getElementById('chart'));
+
+//伟大的data
+let data = []; 
+//先生成四个质心
+for (let i = 0; i < 4; i++) {
+  const newData = {
+      state:[0],
+      value: [0, 0, 0],
+      itemStyle: {color: `0,0,0`},
+      symbol: 'circle',
+      symbolSize:10
+    };
+  data.push(newData);
+}
+let rgbaArray = [
+  "rgba(0, 0, 139, 0.5)",  // 深蓝
+  "rgba(173, 216, 230, 0.5)",  // 浅蓝
+  "rgba(139, 0, 0, 0.5)",  // 深红
+  "rgba(255, 182, 193, 0.5)"  // 浅红
+];
+//生成簇
+for (let i = 0; i < 4; i++){
+const newData = {
+      state:[1,i],
+      value: [0, 0, 0],
+      itemStyle: {color: rgbaArray[i]},
+      symbol: 'circle',
+      symbolSize:6
+    };
+  data.push(newData);}
+
+//console.log("更改后",data[3].value[0]);
+
+
+
+let grape = [];
+let pineapple = [];
+let orange = [];
+let watermelon = [];
+// 初始化质心存储数组
+let grape_heart = [];
+let pine_heart = [];
+let orange_heart = [];
+let watermelon_heart = [];
+
+//初始化最新质心
+let grapeCentroid = [0,0];
+let pineCentroid = [0,0];
+let orangeCentroid = [0,0];
+let watermelonCentroid = [0,0];
+
+//初始化预测点的坐标
+let predict=[[0,0]];
+
+
+//画图相关
+const option = {
+  animation: true,
+  animationDuration: 1000,
+  animationEasing: 'cubicInOut',
+  xAxis: {
+    min: 0,
+    max: 255,
+    name: '水果颜色',
+    nameLocation: 'middle',
+    nameGap: 35,
+    axisLabel: {interval: 50}
+  },
+  yAxis: {
+    min: 0,
+    max: 5,
+    name: '水果质量（单位kg）',
+    nameLocation: 'middle',
+    nameGap: 35,
+    axisLabel: {interval: 10}
+  },
+  series: [{
+    data: data,
+    type: 'scatter',
+    // //定义圆圈画出的大小
+    // symbolSize: function(data) {
+    //   return data[2] * 6 + 6;
+    // },
+    effect: {
+      show: true,
+      period: 2,
+      trailLength: 0.7,
+      symbolSize: 3,
+      symbol: 'circle',
+      loop: true
+    }
+  }]
+};
+
+chart.setOption(option);
+
+
+// let charta = echarts.init(document.getElementById('chart'));
+
+// // 获取图表的宽度和高度
+// let chartWidth = charta.getWidth();
+// console.log("打印宽度为",chartWidth);
+
+
+const colorValue = document.getElementById('colorValue');
+const weightValue = document.getElementById('weightValue');
+const colorPreview = document.getElementById('colorPreview');
+const colorError = document.getElementById('colorError');
+const weightError = document.getElementById('weightError');
+const fruitType = document.getElementById('fruitType');
+const predictColorValue = document.getElementById('predictColorValue');
+const predictWeightValue = document.getElementById('predictWeightValue');
+const predictionResult = document.getElementById('predictionResult');
+
+colorValue.addEventListener('input', function() {
+  const value = parseInt(this.value);
+  if (value < 0 || value > 255) {
+    colorError.classList.remove('hidden');
+  } else {
+    colorError.classList.add('hidden');
+    colorPreview.style.backgroundColor = `rgb(${value},255,0)`;
+  }
+});
+
+weightValue.addEventListener('input', function() {
+  const value = parseFloat(this.value);
+  if (value < 0 || value > 5) {
+    weightError.classList.remove('hidden');
+  }else{weightError.classList.add('hidden');
+  colorPreview.style.backgroundColor = `rgb(${value},255,0)`;
+  }
+});
+
+document.getElementById('confirmBtn').addEventListener('click', () => {
+  const color = parseInt(colorValue.value);
+  const weight = parseFloat(weightValue.value);
+  const fruit = fruitType.value;
+
+  // 确保颜色值和质量在有效范围内
+  if (color >= 0 && color <= 255 && weight >= 0 && weight <= 5) {
+    let symbol = 'circle';
+
+    // 根据水果类型设置符号
+    if (fruit === 'grape') symbol = 'triangle';
+    if (fruit === 'pineapple') symbol = 'diamond';
+    if (fruit === 'orange') symbol = 'rect';
+    if (fruit === 'watermelon') symbol = 'circle';
+    console.log('data第一次', data);
+    // 新数据对象
+    const newData = {
+      state:[2],
+      value: [color, weight, weight],
+      itemStyle: {color: `rgb(${color},255,0)`},
+      symbol: symbol,
+      symbolSize:weight*6+6
+    };
+
+    // 根据水果类型存入对应的数组
+    if (fruit === 'grape') {
+      if (grape.length < 100) {
+        grape.push([color, weight]);  // 第1列是颜色，第2列是质量
+      }
+    } else if (fruit === 'pineapple') {
+      if (pineapple.length < 100) {
+        pineapple.push([color, weight]);
+      }
+    } else if (fruit === 'orange') {
+      if (orange.length < 100) {
+        orange.push([color, weight]);
+      }
+    } else if (fruit === 'watermelon') {
+      if (watermelon.length < 100) {
+        watermelon.push([color, weight]);
+      }
+    }
+    updateCentroids(grape, pineapple, orange, watermelon);//更新质心
+    // drawClusterWithCentroid(chart, data, watermelon, grape, pineapple, orange, watermelon_heart, grape_heart, pine_heart, orange_heart)
+    
+
+    // 执行计算平均欧几里得距离
+    calculateDistances();
+
+        //更新质心的位置
+        if(watermelonCentroid ===null){
+          watermelonCentroid=[0,0];
+        }
+        data[0].value=[watermelonCentroid[0],watermelonCentroid[1],watermelonCentroid[1]];
+        
+        if(orangeCentroid ===null){
+          orangeCentroid=[0,0];
+        }
+        data[1].value=[orangeCentroid[0],orangeCentroid[1],orangeCentroid[1]];
+        
+        if(grapeCentroid ===null){
+          grapeCentroid=[0,0];
+        }
+        data[2].value=[grapeCentroid[0],grapeCentroid[1],grapeCentroid[1]];
+        
+        if(pineCentroid ===null){
+          pineCentroid=[0,0];
+        }
+        data[3].value=[pineCentroid[0],pineCentroid[1],pineCentroid[1]];
+
+
+        //更新簇的位置
+        if(watermelonCentroid ===null){
+          watermelonCentroid=[0,0];
+        }
+        data[4].value=[watermelonCentroid[0],watermelonCentroid[1],watermelonCentroid[1]];
+        data[4].symbolSize=avgWatermelonDistance*4.5;
+        
+        if(orangeCentroid ===null){
+          orangeCentroid=[0,0];
+        }
+        data[5].value=[orangeCentroid[0],orangeCentroid[1],orangeCentroid[1]];
+        data[5].symbolSize=avgOrangeDistance*4.5;
+        
+        if(grapeCentroid ===null){
+          grapeCentroid=[0,0];
+        }
+        data[6].value=[grapeCentroid[0],grapeCentroid[1],grapeCentroid[1]];
+        data[6].symbolSize=avgGrapeDistance*4.5;
+        
+        if(pineCentroid ===null){
+          pineCentroid=[0,0];
+        }
+        data[7].value=[pineCentroid[0],pineCentroid[1],pineCentroid[1]];
+        data[7].symbolSize=avgPineappleDistance*4.5;
+
+// console.log("西瓜君在外面1", watermelonCentroid);
+// console.log("西瓜君的元素1", watermelonCentroid[0]);
+// console.log("西瓜君的data",data[0].value);
+
+
+      // 输出结果
+  console.log("葡萄的平均欧几里得距离:", avgGrapeDistance);
+  console.log("菠萝的平均欧几里得距离:", avgPineappleDistance);
+  console.log("橙子的平均欧几里得距离:", avgOrangeDistance);
+  console.log("西瓜的平均欧几里得距离:", avgWatermelonDistance);
+
+    // // 打印每个数组
+    // console.log('grape:', grape);
+    // console.log('pineapple:', pineapple);
+    // console.log('orange:', orange);
+    // console.log('watermelon:', watermelon);
+
+    // 将新数据添加到图表
+    data.push(newData);
+    console.log('最伟大的data', data);
+    // 更新图表
+    chart.setOption({
+      series: [{
+        data: data,
+        animationDurationUpdate: 1000,
+        animationEasingUpdate: 'cubicInOut'
+      }]
+    });
+
+   
+
+
+    // 清空输入字段
+    colorValue.value = '';
+    weightValue.value = '';
+    colorPreview.style.backgroundColor = '';
+  }
+});
+// 获取元素
+
+const colorInput2 = document.getElementById('predictColorValue');
+const weightInput2 = document.getElementById('predictWeightValue');
+const colorError2 = document.getElementById('predictColorError');
+const weightError2 = document.getElementById('predictWeightError');
+const predictionResult2 = document.getElementById('predictionResult');
+
+// 监听“开始预测”按钮的点击事件
+document.getElementById('predictButton').addEventListener('click', () => {
+    // 获取输入的颜色值和质量值
+    const colorValue2 = parseInt(colorInput2.value);
+    const weightValue2 = parseFloat(weightInput2.value);
+    predict[0][0]=colorValue2;
+    predict[0][1]=weightValue2;
+
+    // 先清除之前的错误提示
+    colorError2.classList.add('hidden');
+    weightError2.classList.add('hidden');
+
+    // 验证输入的颜色值是否有效
+    if (isNaN(colorValue2) || colorValue2 < 0 || colorValue2 > 255) {
+        colorError2.classList.remove('hidden');
+        return;
+    }
+
+    // 验证输入的质量值是否有效
+    if (isNaN(weightValue2) || weightValue2 < 0 || weightValue2 > 5) {
+        weightError2.classList.remove('hidden');
+        return;
+    }
+    const newData = {
+      state:[4],
+      value: [colorValue2, weightValue2, weightValue2],
+      itemStyle: {color: 'red'},
+      symbol: 'circle',
+      symbolSize:10
+    };
+    data.push(newData);
+    chart.setOption({
+      series: [{
+        data: data,
+        animationDurationUpdate: 1000,
+        animationEasingUpdate: 'cubicInOut'
+      }]
+    })
+
+    avgGrapeDistance2 = calculateAverageDistance(predict, grapeCentroid);
+    avgPineappleDistance2 = calculateAverageDistance(predict, pineCentroid);
+    avgOrangeDistance2 = calculateAverageDistance(predict, orangeCentroid);
+    avgWatermelonDistance2 = calculateAverageDistance(predict, watermelonCentroid);
+
+    let distances = [
+  avgGrapeDistance2,    // 青葡萄
+  avgPineappleDistance2, // 菠萝
+  avgOrangeDistance2,    // 橙子
+  avgWatermelonDistance2 // 西瓜
+];
+
+// 找到最小的值
+let minDistance = Math.min(...distances);
+
+// 初始化结果数组
+let result = [];
+
+// 根据最小值的索引，决定对应的水果
+if (avgGrapeDistance2 === minDistance) result.push(3); // 青葡萄
+if (avgPineappleDistance2 === minDistance) result.push(2); // 菠萝
+if (avgOrangeDistance2 === minDistance) result.push(4); // 橙子
+if (avgWatermelonDistance2 === minDistance) result.push(1); // 西瓜
+
+console.log(result);
+
+// 水果名称对应的数组
+const fruitNames = ['西瓜', '菠萝', '青梅', '橙子']; 
+
+// 输出文本变量
+let prediction2 = "";
+
+// 如果 result 数组只有一个元素
+if (result.length === 1) {
+    prediction2 = `【${fruitNames[result[0] - 1]}】`;  // 数组索引是从0开始，所以需要减去1
+} else {
+    // 如果 result 数组有多个元素，拼接水果名称
+    const fruits = result.map(index => fruitNames[index - 1]);
+    prediction2 = `【${fruits.join('或')}（同时符合以上水果的特征）】`;
+}
+
+    // 显示预测结果
+    predictionResult2.textContent = prediction2;
+
+});
+
+
+
+////更新质心函数
+function updateCentroids(grape, pineapple, orange, watermelon) {
+
+
+    // 通用的质心计算函数
+    function calculateCentroid(data) {
+        const validRows = data.filter(row => row[0] !== 0 && row[1] !== 0); // 去除全为0的行
+        const rowCount = validRows.length;
+
+        if (rowCount === 0) {
+            console.log("该数组全为0，停止操作");
+            return null; // 全为0，停止操作
+        } else if (rowCount === 1) {
+            console.log("该数组只有一行，无需计算质心:", validRows[0]);
+            return validRows[0]; // 只有一行，返回原数据
+        } else if (rowCount === 2) {
+            // 计算两行数据的质心
+            const centroid = [
+                (validRows[0][0] + validRows[1][0]) / 2, // 颜色质心
+                (validRows[0][1] + validRows[1][1]) / 2  // 重量质心
+            ];
+            console.log("两行数据质心计算结果:", centroid);
+            return centroid;
+        } else {
+            // 使用已有质心和最新数据更新质心
+            const lastCentroid = validRows[validRows.length - 2]; // 之前的质心
+            const latestData = validRows[validRows.length - 1];   // 最新一行数据
+
+            const updatedCentroid = [
+                (lastCentroid[0] + latestData[0]) / 2, // 更新颜色质心
+                (lastCentroid[1] + latestData[1]) / 2  // 更新重量质心
+            ];
+            console.log("更新质心计算结果:", updatedCentroid);
+            return updatedCentroid;
+        }
+    }
+
+    // 计算每种水果的质心并存储到对应数组
+    grape_heart.push(calculateCentroid(grape));
+    pine_heart.push(calculateCentroid(pineapple));
+    orange_heart.push(calculateCentroid(orange));
+    watermelon_heart.push(calculateCentroid(watermelon));
+
+    // 打印所有质心到控制台
+    console.log("所有质心结果：");
+    console.log("Grape Centroid:", grape_heart);
+    console.log("Pineapple Centroid:", pine_heart);
+    console.log("Orange Centroid:", orange_heart);
+    console.log("Watermelon Centroid:", watermelon_heart);
+
+}
+
+//计算簇半径
+// 计算欧几里得距离的函数
+// 计算欧几里得距离的函数
+function calculateEuclideanDistance(point, centroid) {
+  let sum = 0;
+  for (let i = 0; i < point.length; i++) {
+    sum += Math.pow(point[i] - centroid[i], 2);
+  }
+  return Math.sqrt(sum);
+}
+
+// 提取每组数据的最新质心
+function getLatestCentroid(centroidArray) {
+  if (centroidArray.length === 0) {
+    return undefined; // 如果数组为空，则返回 undefined
+  }
+  return centroidArray[centroidArray.length - 1]; // 获取数组中的最后一个质心
+}
+
+// 计算每组数据点到质心的平均欧几里得距离
+function calculateAverageDistance(dataPoints, centroid) {
+  let totalDistance = 0;
+  dataPoints.forEach(point => {
+    totalDistance += calculateEuclideanDistance(point, centroid);
+  });
+  return totalDistance / dataPoints.length;
+}
+
+// 计算各组数据的平均欧几里得距离
+function calculateDistances() {
+  // 提取每组数据的最新质心
+// 获取每种水果的最新质心
+grapeCentroid = getLatestCentroid(grape_heart);
+if (grapeCentroid === undefined) {
+  grapeCentroid = [0, 0]; // 如果质心是 undefined，则赋值为 [0, 0]
+}
+
+pineCentroid = getLatestCentroid(pine_heart);
+if (pineCentroid === undefined) {
+  pineCentroid = [0, 0]; // 如果质心是 undefined，则赋值为 [0, 0]
+}
+
+orangeCentroid = getLatestCentroid(orange_heart);
+if (orangeCentroid === undefined) {
+  orangeCentroid = [0, 0]; // 如果质心是 undefined，则赋值为 [0, 0]
+}
+
+watermelonCentroid = getLatestCentroid(watermelon_heart);
+if (watermelonCentroid === undefined) {
+  watermelonCentroid = [0, 0]; // 如果质心是 undefined，则赋值为 [0, 0]
+}
+console.log("西瓜君", watermelonCentroid);
+
+  // 计算每组数据点到质心的平均欧几里得距离
+  console.log("西瓜质111",watermelonCentroid);
+  console.log("西瓜测111",watermelon);
+  avgGrapeDistance = calculateAverageDistance(grape, grapeCentroid);
+  avgPineappleDistance = calculateAverageDistance(pineapple, pineCentroid);
+  avgOrangeDistance = calculateAverageDistance(orange, orangeCentroid);
+  avgWatermelonDistance = calculateAverageDistance(watermelon, watermelonCentroid);
+
+  // // 输出结果
+  // console.log("葡萄的平均欧几里得距离:", avgGrapeDistance);
+  // console.log("菠萝的平均欧几里得距离:", avgPineappleDistance);
+  // console.log("橙子的平均欧几里得距离:", avgOrangeDistance);
+  // console.log("西瓜的平均欧几里得距离:", avgWatermelonDistance);
+}
+
+
+</script>
+  
+</body></html>
